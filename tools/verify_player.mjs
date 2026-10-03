@@ -26,40 +26,54 @@ const results = await page.evaluate(async () => {
   const p = window.__player;
   const step = (n, dt = 1 / 60) => { for (let i = 0; i < n; i++) mod.updatePlayer(p, dt); };
 
-  // 1. Walk 2 sim-seconds north (W, away from the south-placed camera).
-  p.pos.set(30, 0, 44); p.yaw = Math.PI; p.camYaw = 0; p.vy = 0; p.grounded = true;
+  // 1. Walk 3 sim-seconds north; measure steady-state speed over the last 1 s
+  // (acceleration ramps 0 -> 2.5 m/s).
+  p.pos.set(30, 0, 44); p.yaw = Math.PI; p.camYaw = 0; p.vy = 0; p.grounded = true; p.speed = 0;
   p.test.setKeys({ KeyW: true });
+  step(120);
   const z0 = p.pos.z;
-  step(120);
-  out.walkDist = z0 - p.pos.z; // expect 2.5 * 2 = 5.0
-
-  // 2. Run 2 sim-seconds north up the clear x=-120 street (the church
-  // blocks the plaza spawn run-up now that collisions exist).
-  p.pos.set(-120, 0, 40); p.camYaw = 0;
-  p.test.setKeys({ KeyW: true, ShiftLeft: true });
-  const z2 = p.pos.z;
-  step(120);
-  out.runDist = z2 - p.pos.z; // expect 7.0 * 2 = 14.0
-  out.runAnim = p.anim;
+  step(60);
+  out.walkDist = z0 - p.pos.z; // expect 2.5 m in the last 1 s
   p.test.setKeys({});
 
-  // 3. Strafe right (D) moves +x relative to the camera.
-  p.pos.set(30, 0, 44); p.camYaw = 0;
+  // 2. Sprint 3 sim-seconds north up the clear x=-120 street; the ramp
+  // 0 -> 9.5 m/s crosses the jog band, exercising the crossfades.
+  p.pos.set(-120, 0, 40); p.camYaw = 0; p.speed = 0;
+  p.test.setKeys({ KeyW: true, ShiftLeft: true });
+  const seen = new Set();
+  for (let i = 0; i < 180; i++) {
+    mod.updatePlayer(p, 1 / 60);
+    seen.add(p.anim);
+    if (i === 120) out.sprintZ0 = p.pos.z;
+  }
+  out.runDist = out.sprintZ0 - p.pos.z; // expect 9.5 m in the last 1 s
+  out.runAnim = p.anim;
+  out.jogSeen = seen.has('Jog_Fwd_Loop');
+  out.sprintSeen = seen.has('Sprint_Loop');
+  p.test.setKeys({});
+
+  // 3. Strafe right (D) moves +x relative to the camera (steady state).
+  p.pos.set(30, 0, 44); p.camYaw = 0; p.speed = 0;
   p.test.setKeys({ KeyD: true });
+  step(120);
   const x0 = p.pos.x;
   step(60);
-  out.strafeDx = p.pos.x - x0; // expect 2.5 * 1 = 2.5
+  out.strafeDx = p.pos.x - x0; // expect 2.5 m in the last 1 s
   p.test.setKeys({});
 
-  // 4. Jump: peak height and landing.
-  p.pos.set(30, 0, 44); p.vy = 0; p.grounded = true;
+  // 4. Jump: phase sequence Start -> Loop -> Land -> Idle, peak + landing.
+  p.pos.set(30, 0, 44); p.vy = 0; p.grounded = true; p.speed = 0; p.jumpPhase = null;
   p.test.jump();
+  const phases = [];
   let peak = 0;
-  for (let i = 0; i < 30; i++) { mod.updatePlayer(p, 1 / 60); peak = Math.max(peak, p.pos.y); }
-  out.jumpAnim = p.anim; // sampled mid-flight
-  for (let i = 0; i < 90; i++) { mod.updatePlayer(p, 1 / 60); peak = Math.max(peak, p.pos.y); }
+  for (let i = 0; i < 200; i++) {
+    mod.updatePlayer(p, 1 / 60);
+    peak = Math.max(peak, p.pos.y);
+    if (i % 10 === 0) phases.push(p.anim);
+  }
   out.jumpPeak = peak; // expect v^2/2g = 4.8^2/26 ≈ 0.89
   out.landed = p.pos.y === 0 && p.grounded;
+  out.phaseSeq = [...new Set(phases)].join('>');
 
   // 5. Camera wall pull-in.
   const b = window.__colliders.buildings[0];
@@ -80,13 +94,15 @@ const results = await page.evaluate(async () => {
   return out;
 });
 
-check('walk speed', Math.abs(results.walkDist - 5.0) < 0.3, `${results.walkDist.toFixed(2)} m / 2 s`);
-check('run speed', Math.abs(results.runDist - 14.0) < 0.5, `${results.runDist.toFixed(2)} m / 2 s`);
+check('walk speed', Math.abs(results.walkDist - 2.5) < 0.2, `${results.walkDist.toFixed(2)} m / 1 s steady`);
+check('sprint speed', Math.abs(results.runDist - 9.5) < 0.3, `${results.runDist.toFixed(2)} m / 1 s steady`);
+check('ramp crosses jog band', results.jogSeen && results.sprintSeen,
+  `jog=${results.jogSeen}, sprint=${results.sprintSeen}`);
 check('strafe right', Math.abs(results.strafeDx - 2.5) < 0.3, `${results.strafeDx.toFixed(2)} m / 1 s`);
+check('jump phases', results.phaseSeq === 'Jump_Start>Jump_Loop>Jump_Land>Idle_Loop', results.phaseSeq);
 check('jump peak', Math.abs(results.jumpPeak - 0.89) < 0.1, `${results.jumpPeak.toFixed(2)} m`);
 check('jump lands', results.landed);
-check('jump animation', results.jumpAnim === 'Jump_Loop', results.jumpAnim);
-check('run animation', results.runAnim === 'Jog_Fwd_Loop', results.runAnim);
+check('sprint animation', results.runAnim === 'Sprint_Loop', results.runAnim);
 check('camera pulls in at wall', results.camDist < 5.0, `${results.camDist.toFixed(1)} m vs want 6`);
 check('model faces movement', Math.abs(results.faceYaw - Math.PI) < 0.3, `${results.faceYaw.toFixed(2)} rad`);
 

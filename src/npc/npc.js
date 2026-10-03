@@ -61,6 +61,24 @@ export function getMixer(char) {
   return char.userData.mixer;
 }
 
+// Locomotion bands with hysteresis: shift up past UP[i], down past DOWN[i].
+// The jog band is crossed during acceleration, so walk->sprint naturally
+// crossfades through Walk_Loop -> Jog_Fwd_Loop -> Sprint_Loop.
+const LOCO_ORDER = ['Idle_Loop', 'Walk_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop'];
+const LOCO_UP = [0.8, 4.2, 8.2];
+const LOCO_DOWN = [0, 0.4, 3.4, 7.4];
+
+/**
+ * Pick the locomotion clip for a speed, with hysteresis against the current
+ * clip so boundary speeds don't flicker between states.
+ */
+export function locomotionClip(speed, current) {
+  let i = Math.max(0, LOCO_ORDER.indexOf(current));
+  while (i < 3 && speed >= LOCO_UP[i]) i++;
+  while (i > 0 && speed <= LOCO_DOWN[i]) i--;
+  return LOCO_ORDER[i];
+}
+
 /**
  * Crossfade the character to a named clip (e.g. 'Idle_Loop', 'Walk_Loop').
  * Clips come from the shared UAL1_Standard library.

@@ -2,11 +2,11 @@
 // Space jump, a pointer-lock mouse camera with scroll zoom, and a wall-aware
 // camera that pulls in instead of clipping through buildings.
 import * as THREE from 'three';
-import { makeCharacter, playAnim } from '../npc/npc.js';
+import { makeCharacter, playAnim, locomotionClip } from '../npc/npc.js';
 import { raySegmentHit, resolveCollisions, applyGround } from '../city/colliders.js';
 
 const WALK_SPEED = 2.5;
-const RUN_SPEED = 7.0;
+const SPRINT_SPEED = 9.5;
 const JUMP_VY = 4.8;
 const GRAVITY = -13;
 const HEAD_H = 1.62; // camera look-at / ray origin height above the feet
@@ -30,7 +30,16 @@ function tryJump(player) {
   if (player.grounded) {
     player.vy = JUMP_VY;
     player.grounded = false;
+    player.jumpPhase = 'start';
+    setAnim(player, 'Jump_Start', false);
   }
+}
+
+/** Play a clip on the player if it isn't already playing. */
+function setAnim(player, name, loop = true) {
+  if (player.anim === name) return;
+  player.anim = name;
+  playAnim(player.group, name, { loop }).catch(() => {});
 }
 
 export async function createPlayer(scene, camera, canvas) {
@@ -48,12 +57,15 @@ export async function createPlayer(scene, camera, canvas) {
     pos: group.position,
     vy: 0,
     grounded: true,
+    speed: 0, // scalar ground speed (ramps with acceleration)
     yaw: Math.PI, // character facing; the model faces +z at rotation 0
     camYaw: 0, // camera south of the player, looking north
     camPitch: 0.34,
     camDist: 4.6,
     keys: {},
     anim: null,
+    jumpPhase: null, // null | 'start' | 'air' | 'land'
+    landTimer: 0,
   };
   group.rotation.y = player.yaw;
 
@@ -104,15 +116,56 @@ export async function createPlayer(scene, camera, canvas) {
   return player;
 }
 
+/**
+ * Feature 7: player animation state machine.
+ * Airborne: Jump_Start (takeoff) -> Jump_Loop (air) -> Jump_Land (landing).
+ * Grounded: idle/walk/jog/sprint via the shared hysteresis bands — every
+ * transition crossfades through playAnim.
+ */
+function updatePlayerAnimation(player, dt, wasGrounded) {
+  if (!player.grounded) {
+    if (player.jumpPhase === 'start' && player.vy < 1.5) {
+      // Takeoff done (still rising fast) -> air loop.
+      player.jumpPhase = 'air';
+      setAnim(player, 'Jump_Loop');
+    } else if (player.jumpPhase === null) {
+      // Walked off a ledge — straight to the air loop.
+      player.jumpPhase = 'air';
+      setAnim(player, 'Jump_Loop');
+    }
+    return;
+  }
+  // Grounded.
+  if (!wasGrounded && player.jumpPhase !== null) {
+    // Just landed.
+    player.jumpPhase = 'land';
+    player.landTimer = 0.45;
+    setAnim(player, 'Jump_Land', false);
+    return;
+  }
+  if (player.jumpPhase === 'land') {
+    player.landTimer -= dt;
+    if (player.landTimer > 0) return; // brief landing beat, then locomotion
+    player.jumpPhase = null;
+  }
+  setAnim(player, locomotionClip(player.speed, player.anim));
+}
+
 /** Advance the player simulation by dt seconds. */
 export function updatePlayer(player, dt) {
   const k = player.keys;
   const ix = ((k.KeyD || k.ArrowRight) ? 1 : 0) - ((k.KeyA || k.ArrowLeft) ? 1 : 0);
   const iz = ((k.KeyW || k.ArrowUp) ? 1 : 0) - ((k.KeyS || k.ArrowDown) ? 1 : 0);
-  const running = !!(k.ShiftLeft || k.ShiftRight);
+  const sprinting = !!(k.ShiftLeft || k.ShiftRight);
   const moving = ix !== 0 || iz !== 0;
 
-  if (moving) {
+  // Acceleration toward the target speed — the ramp crosses the jog band,
+  // so walk->sprint naturally crossfades through Jog_Fwd_Loop.
+  const target = moving ? (sprinting ? SPRINT_SPEED : WALK_SPEED) : 0;
+  const lambda = target > player.speed ? 6 : 10;
+  player.speed = THREE.MathUtils.damp(player.speed, target, lambda, dt);
+
+  if (moving && player.speed > 0.05) {
     const len = Math.hypot(ix, iz);
     const nx = ix / len;
     const nz = iz / len;
@@ -123,28 +176,18 @@ export function updatePlayer(player, dt) {
     const rz = -Math.sin(player.camYaw);
     const wx = rx * nx + fx * nz;
     const wz = rz * nx + fz * nz;
-    const speed = running ? RUN_SPEED : WALK_SPEED;
-    player.pos.x += wx * speed * dt;
-    player.pos.z += wz * speed * dt;
+    player.pos.x += wx * player.speed * dt;
+    player.pos.z += wz * player.speed * dt;
     player.yaw = dampAngle(player.yaw, Math.atan2(wx, wz), 12, dt);
     player.group.rotation.y = player.yaw;
   }
 
   // Feature 6: collide (capsule vs buildings/props), then ground + gravity.
   resolveCollisions(player.pos);
+  const wasGrounded = player.grounded;
   applyGround(player, dt, GRAVITY);
 
-  // Locomotion animation (simple switch here; feature 7 builds the full
-  // crossfaded state machine on top of playAnim).
-  const wantAnim = !player.grounded
-    ? 'Jump_Loop'
-    : moving
-      ? running ? 'Jog_Fwd_Loop' : 'Walk_Loop'
-      : 'Idle_Loop';
-  if (player.anim !== wantAnim) {
-    player.anim = wantAnim;
-    playAnim(player.group, wantAnim).catch(() => {});
-  }
+  updatePlayerAnimation(player, dt, wasGrounded);
 
   // Third-person camera with wall pull-in.
   const headY = player.pos.y + HEAD_H;
