@@ -52,19 +52,58 @@ around a living low-poly city full of NPCs.** No combat, no quests yet — roami
     (alt colour), `T_Regular_Male/Female_Dark_BaseColor` (skin).
 - All outfits share **one 65-joint skeleton**.
 
-**Gotchas — these two block NPCs, solve first:**
-1. **No heads/faces.** The Readme says these outfits pair with Quaternius' *Universal Base Characters*
-   (https://quaternius.com/packs/universalbasecharacters.html, free, CC0). Only the **head** of the base
-   character is needed (body would clip). → Ask the user to download it into `characters/UniversalBase/`
-   if missing. Fallback until then: rangers already have hoods; for peasants attach a simple head mesh.
-2. **No animations (0 clips).** Need *Universal Animation Library* from Quaternius (same skeleton,
-   CC0: idle, walk, run, sit, talk, wave…). → Ask the user to download into `characters/Animations/`.
-   Load clips once and play them on every character via `AnimationMixer` (same rig = retarget-free).
+- The outfits have **no heads and no animations**. Both come from the two packs below
+  (Quaternius, CC0). **All three packs use the identical 65-bone skeleton** (verified, same bone names)
+  → no retargeting needed.
+
+### C. `characters/UniversalBase/` — heads, faces, hair (Universal Base Characters, free version)
+- Use `Base Characters/Godot - UE/`:
+  - `Superhero_Male_FullBody.gltf` (meshes: `Face`, `Face.001`, body) and
+    `Superhero_Female_FullBody.gltf` (meshes: `Eyebrows`, `Eyes`, `Superhero_Female`).
+  - Skin: `T_Superhero_Male_Dark.png`, `T_Superhero_Female_Dark_BaseColor.png` (+ `_Normal`, `_Roughness`);
+    eyes: `T_Eye_Brown.png`.
+- Hair: `Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/` → `Hair_Beard`, `Hair_Buns`, `Hair_Buzzed`,
+  `Hair_BuzzedFemale`, `Hair_Long`, `Hair_SimpleParted`, `Eyebrows_Female`, `Eyebrows_Regular`
+  (textures `T_Hair_1/2_*`). Already skinned to the head bone → just bind to the character skeleton.
+- Ignore: `Unity/`, `FBX` folders, `Hairstyles/Origin at 0/`, the duplicate `*_png.png` files.
+
+**Gotchas:**
+1. Free version ships only **Superhero** proportions; the outfits are **Regular** proportions. Only the
+   head is used, so: in Blender headless (`tools/extract_heads.py`) **delete every vertex not weighted to
+   `neck`/`Head` bones** → export `Head_Male.glb` / `Head_Female.glb`. Body would clip (Readme says so).
+2. Bind the head to the **outfit's** skeleton (outfit is the master rig). Verify the neck seam lines up;
+   if the head floats/sinks, adjust the head mesh offset or scale ~0.95 in the extract script — check
+   with a screenshot, don't guess.
+3. Rangers wear `Head_Hood` → skip hair for them (it clips through the hood).
+
+### D. `characters/Animations/` — Universal Animation Library (43 clips)
+- Use `Unreal-Godot/UAL1_Standard.glb` (in-place; the game moves the character).
+  `UAL1_Standard_RM.glb` = root-motion version — don't use. Ignore `Unity/`.
+- Load the `.glb` once, take `gltf.animations`, play them on any character with its own `AnimationMixer`.
+  Drop the `Mannequin` mesh.
+- Clips mapped to game needs:
+
+| Need | Clip |
+|------|------|
+| Idle | `Idle_Loop` |
+| Walk (NPC) / walk (player) | `Walk_Loop`, `Walk_Formal_Loop` (variety) |
+| Jog / Run | `Jog_Fwd_Loop`, `Sprint_Loop` |
+| Jump | `Jump_Start` → `Jump_Loop` → `Jump_Land` |
+| Sit on bench/chair | `Sitting_Enter` → `Sitting_Idle_Loop` / `Sitting_Talking_Loop` → `Sitting_Exit` |
+| Chat with NPC / player | `Idle_Talking_Loop` |
+| Interact (E key) | `Interact` |
+| Ambient life | `Dance_Loop`, `Fixing_Kneeling`, `PickUp_Table`, `Idle_Torch_Loop` (night), `Push_Loop` |
+| Water (canal) | `Swim_Idle_Loop`, `Swim_Fwd_Loop` |
+| Crouch | `Crouch_Idle_Loop`, `Crouch_Fwd_Loop` |
+
+  Combat clips (Sword/Pistol/Punch/Spell/Hit/Death) — ignore for now (no combat).
 
 **Variety recipe (cheap):** mix-and-match modular parts + swap BaseColor (`T_Peasant` vs `_2`,
-`T_Ranger` vs `_3`) + skin tone + male/female → **dozens of distinct NPCs from 4 outfits**.
-Build them with a `makeCharacter({sex, body, legs, feet, head, palette})` that clones the shared skeleton
-via `SkeletonUtils.clone` and binds parts to it.
+`T_Ranger` vs `_3`) + male/female + 6 hairstyles + beard/no beard + walk style (`Walk_Loop` vs
+`Walk_Formal_Loop`) → **hundreds of distinct NPCs from 4 outfits**.
+Build them with `makeCharacter({sex, outfit, palette, hair, beard})`: clone the outfit with
+`SkeletonUtils.clone`, then bind head + hair meshes to that same skeleton (`mesh.bind(skeleton)`).
+Cache one template per (sex, outfit); clone per NPC.
 
 ## 2. Features — build in this order, one at a time
 
@@ -76,18 +115,21 @@ current one runs with **zero console errors** and **≥ 60 FPS** on this Mac.
 | 1 | Vite + Three.js skeleton, ground plane, sky/fog, sun light + shadows, stats overlay | Page loads, FPS visible |
 | 2 | Asset pipeline: `tools/convert_city.py` → 28 `.glb`; tiny asset viewer page | All 28 render at correct scale |
 | 3 | City generator: grid of streets + blocks from data (`src/city/layout.js`, seeded random), houses w/ random colorscheme, lampposts/benches/trees along streets, canal + bridge, harbour edge | A walkable town ~300×300 m |
-| 4 | Player: Ranger outfit, WASD + Shift run, Space jump, **third-person orbit camera** (mouse, pointer-lock, scroll zoom, camera doesn't clip through walls via raycast) | Smooth roaming |
-| 5 | Collisions: simple — box colliders from building bounds + capsule vs AABB, ground height | Can't walk through houses |
-| 6 | Animations on player: idle / walk / run blend by speed | Feet don't slide |
-| 7 | NPCs: spawn 30–60 randomized characters; navigation via a **waypoint graph of sidewalks** (not a navmesh lib) | NPCs walk the streets |
-| 8 | NPC behaviours (tiny state machine): `wander → sit (bench/chair) → stand → chat (2 NPCs face each other, talk anim) → wander`; look at player when near | City feels alive |
-| 9 | Player interaction: press **E** near NPC → they stop, face you, wave, show a speech bubble line | Interaction works |
-| 10 | Polish: day/night cycle (lamppost lights on at night), footstep/ambient audio, minimap | — |
+| 4 | Character pipeline: `tools/extract_heads.py` → `Head_Male/Female.glb`; `makeCharacter()`; character viewer page showing 8 random NPCs playing `Idle_Loop` | Heads sit on necks, no clipping |
+| 5 | Player: Ranger outfit, WASD + Shift run, Space jump, **third-person orbit camera** (mouse, pointer-lock, scroll zoom, camera doesn't clip through walls via raycast) | Smooth roaming |
+| 6 | Collisions: simple — box colliders from building bounds + capsule vs AABB, ground height | Can't walk through houses |
+| 7 | Player animations: `Idle_Loop` / `Walk_Loop` / `Jog_Fwd_Loop` / `Sprint_Loop` cross-faded by speed, jump trio | Feet don't slide |
+| 8 | NPCs: spawn 30–60 randomized characters; navigation via a **waypoint graph of sidewalks** (not a navmesh lib) | NPCs walk the streets |
+| 9 | NPC behaviours (tiny state machine): `wander → sit (bench/chair: Sitting_Enter/Idle/Exit) → chat (2 NPCs face each other, Idle_Talking_Loop / Sitting_Talking_Loop) → ambient (Dance, Fixing_Kneeling) → wander`; turn head toward player when near | City feels alive |
+| 10 | Player interaction: press **E** near NPC → player plays `Interact`, NPC stops, faces you, `Idle_Talking_Loop` + speech bubble | Interaction works |
+| 11 | Polish: day/night cycle (lamppost lights on at night, some NPCs carry `Idle_Torch_Loop`), swimming in canal, footstep/ambient audio, minimap | — |
 
 ## 3. Performance rules (apply from feature 1)
 
 - `InstancedMesh` for every repeated prop; merge static buildings per block; share materials.
 - One `GLTFLoader` cache — load each `.glb` **once**, clone instances.
+- Load `UAL1_Standard.glb` once (7.6 MB) and share its clips; never load it per NPC.
+- Drop the 4K hair/skin normal maps to 1K at copy time (they're 4–5 MB each) — low-poly doesn't need them.
 - NPC LOD: beyond 40 m → update animation mixer every 3rd frame; beyond 80 m → hide.
 - Shadows: one directional light, shadow camera follows player, `shadowMap` 2048 max.
 - Cap `renderer.setPixelRatio(Math.min(devicePixelRatio, 2))`.
@@ -122,12 +164,12 @@ src/
   npc/npc.js         # character factory, behaviour state machine
   npc/waypoints.js
 public/assets/city/  # converted .glb
-public/assets/chars/ # gltf outfits, heads, animations
+public/assets/chars/ # outfits .gltf, Head_*.glb, hair .gltf, UAL1_Standard.glb
 tools/convert_city.py
+tools/extract_heads.py
 ```
 
 ## 7. Start now
 
-Start with features 1–2. Before feature 6/7, check whether `characters/UniversalBase/` and
-`characters/Animations/` exist; if not, stop and ask the user to download the two free Quaternius
-packs (links above). Report after each feature with: screenshot, FPS, draw calls, commit hash.
+Start with features 1–2. All assets are already in the repo (city, outfits, heads/hair, animations) —
+nothing to download. Copy only the files listed above into `public/assets/` (never the Unity/FBX ones). Report after each feature with: screenshot, FPS, draw calls, commit hash.
