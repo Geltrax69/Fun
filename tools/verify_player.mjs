@@ -33,8 +33,9 @@ const results = await page.evaluate(async () => {
   step(120);
   out.walkDist = z0 - p.pos.z; // expect 2.5 * 2 = 5.0
 
-  // 2. Run 2 sim-seconds.
-  p.pos.set(30, 0, 44);
+  // 2. Run 2 sim-seconds north up the clear x=-120 street (the church
+  // blocks the plaza spawn run-up now that collisions exist).
+  p.pos.set(-120, 0, 40); p.camYaw = 0;
   p.test.setKeys({ KeyW: true, ShiftLeft: true });
   const z2 = p.pos.z;
   step(120);

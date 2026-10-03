@@ -3,7 +3,7 @@
 // camera that pulls in instead of clipping through buildings.
 import * as THREE from 'three';
 import { makeCharacter, playAnim } from '../npc/npc.js';
-import { raySegmentHit } from '../city/colliders.js';
+import { raySegmentHit, resolveCollisions, applyGround } from '../city/colliders.js';
 
 const WALK_SPEED = 2.5;
 const RUN_SPEED = 7.0;
@@ -130,16 +130,9 @@ export function updatePlayer(player, dt) {
     player.group.rotation.y = player.yaw;
   }
 
-  // Gravity + jump (ground plane is y=0 until feature 6 adds terrain height).
-  if (!player.grounded) {
-    player.vy += GRAVITY * dt;
-    player.pos.y += player.vy * dt;
-    if (player.pos.y <= 0) {
-      player.pos.y = 0;
-      player.vy = 0;
-      player.grounded = true;
-    }
-  }
+  // Feature 6: collide (capsule vs buildings/props), then ground + gravity.
+  resolveCollisions(player.pos);
+  applyGround(player, dt, GRAVITY);
 
   // Locomotion animation (simple switch here; feature 7 builds the full
   // crossfaded state machine on top of playAnim).

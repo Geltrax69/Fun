@@ -52,6 +52,7 @@ buildCity(scene)
     // Test hooks: lets verification drive input and read state.
     window.__player = player;
     window.__colliders = colliders;
+    window.__scene = scene;
     document.getElementById('stats').textContent = 'ready';
   })
   .catch((err) => {

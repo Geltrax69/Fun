@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadModel } from '../assets.js';
 import { generateLayout, SCHEME_COUNT } from './layout.js';
-import { addBuildingBox, colliders } from './colliders.js';
+import { addBuildingBox, colliders, addCanalWallBoxes, addQuayWallBoxes, addPropCollider, addWaterGuards } from './colliders.js';
 
 const CITY_URL = '/assets/city';
 const TEX_URL = '/assets/city/textures';
@@ -207,7 +207,17 @@ async function buildProps(scene, layout) {
   const V = new THREE.Vector3();
   const S = new THREE.Vector3();
 
+  // Solid-prop collision radii (trunk/pole/body — canopies are walked under).
+  const PROP_RADIUS = {
+    Lamppost: 0.18, Bench: 0.95, Fence: 1.16, FenceEnd: 0.3, Table: 0.7,
+    Chair: 0.4, Parasol: 0.15, Birchtree: 0.3, ShoreRock: 1.2,
+  };
+
   for (const [type, list] of byType) {
+    const radius = PROP_RADIUS[type];
+    if (radius) {
+      for (const p of list) addPropCollider(p.x, p.z, radius * (p.s || 1));
+    }
     const root = await loadModel(`${CITY_URL}/${type}.glb`);
     root.updateMatrixWorld(true);
     const meshes = [];
@@ -274,6 +284,7 @@ async function buildCanal(scene, layout) {
   im.instanceMatrix.needsUpdate = true;
   im.castShadow = im.receiveShadow = true;
   scene.add(im);
+  addCanalWallBoxes(segs);
 
   for (const bz of bridges)
     await placeModel(scene, 'RiverBridge', 0, -1.2, bz, 0);
@@ -314,12 +325,14 @@ async function buildHarbour(scene, layout) {
   im.instanceMatrix.needsUpdate = true;
   im.castShadow = im.receiveShadow = true;
   scene.add(im);
+  addQuayWallBoxes(segs, 152.15);
 
   const L = layout.lighthouse;
   const lh = await placeModel(scene, 'Lighthouse', L.x, 0.3, L.z, L.rotY);
   addBuildingBox(new THREE.Box3().setFromObject(lh));
   const S = layout.ship;
-  await placeModel(scene, 'Ship', S.x, -0.9, S.z, S.rotY, PALETTES.Ship);
+  const ship = await placeModel(scene, 'Ship', S.x, -0.9, S.z, S.rotY, PALETTES.Ship);
+  addBuildingBox(new THREE.Box3().setFromObject(ship));
 }
 
 export async function buildCity(scene, seed) {
@@ -348,6 +361,7 @@ export async function buildCity(scene, seed) {
   await stage('props', async () => buildProps(scene, layout));
   await stage('canal', async () => buildCanal(scene, layout));
   await stage('harbour', async () => buildHarbour(scene, layout));
+  addWaterGuards();
   // eslint-disable-next-line no-console
   console.log(`city built: ${layout.houses.length} houses, ${layout.props.length} props in ${(performance.now() - t0).toFixed(0)} ms`);
   return { layout, colliders };
