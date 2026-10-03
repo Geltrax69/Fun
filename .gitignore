@@ -1,2 +1,5 @@
 .DS_Store
 .remember/
+node_modules/
+dist/
+tools/_work/
