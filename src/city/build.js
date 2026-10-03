@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadModel } from '../assets.js';
 import { generateLayout, SCHEME_COUNT } from './layout.js';
+import { addBuildingBox, colliders } from './colliders.js';
 
 const CITY_URL = '/assets/city';
 const TEX_URL = '/assets/city/textures';
@@ -149,6 +150,8 @@ async function buildHouses(scene, layout) {
       inst.position.set(h.x, 0, h.z);
       inst.rotation.y = h.rotY;
       inst.updateMatrixWorld(true);
+      // Record the world-space bounds before the geometry is merged away.
+      addBuildingBox(new THREE.Box3().setFromObject(inst));
       inst.traverse((o) => {
         if (!o.isMesh) return;
         const g = o.geometry.clone().applyMatrix4(o.matrixWorld);
@@ -313,7 +316,8 @@ async function buildHarbour(scene, layout) {
   scene.add(im);
 
   const L = layout.lighthouse;
-  await placeModel(scene, 'Lighthouse', L.x, 0.3, L.z, L.rotY);
+  const lh = await placeModel(scene, 'Lighthouse', L.x, 0.3, L.z, L.rotY);
+  addBuildingBox(new THREE.Box3().setFromObject(lh));
   const S = layout.ship;
   await placeModel(scene, 'Ship', S.x, -0.9, S.z, S.rotY, PALETTES.Ship);
 }
@@ -346,5 +350,5 @@ export async function buildCity(scene, seed) {
   await stage('harbour', async () => buildHarbour(scene, layout));
   // eslint-disable-next-line no-console
   console.log(`city built: ${layout.houses.length} houses, ${layout.props.length} props in ${(performance.now() - t0).toFixed(0)} ms`);
-  return layout;
+  return { layout, colliders };
 }

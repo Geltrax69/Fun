@@ -168,8 +168,25 @@ export async function makeCharacter({
 } = {}) {
   const kind = outfit === 'ranger' ? 'ranger' : 'peasant';
 
+  // Resolve the hair choice before loading (rangers wear hoods — no hair).
+  let style = hair;
+  if (style === undefined) {
+    style = kind === 'ranger' ? null : HAIR_STYLES[Math.floor(Math.random() * HAIR_STYLES.length)];
+  }
+  const brows = sex === 'male' ? 'Eyebrows_Regular' : 'Eyebrows_Female';
+  const wantBeard = beard && sex === 'male';
+
+  // Load the outfit template and all body parts concurrently — sequential
+  // awaits here cost ~18 s of texture parsing on a loaded machine.
+  const [template, headMeshes, hairMeshes, browMeshes, beardMeshes] = await Promise.all([
+    outfitTemplate(sex, kind),
+    partMeshes(`${CHARS}/heads/Head_${sex === 'male' ? 'Male' : 'Female'}.glb`),
+    style ? partMeshes(`${CHARS}/hair/${style}.gltf`) : Promise.resolve([]),
+    partMeshes(`${CHARS}/hair/${brows}.gltf`),
+    wantBeard ? partMeshes(`${CHARS}/hair/Hair_Beard.gltf`) : Promise.resolve([]),
+  ]);
+
   // 1. Outfit body — clone() re-targets the skeleton to the cloned bones.
-  const template = await outfitTemplate(sex, kind);
   const char = cloneSkinned(template);
 
   // The character's own skeleton (from the cloned outfit).
@@ -179,36 +196,16 @@ export async function makeCharacter({
   });
   if (!skeleton) throw new Error(`no skeleton found for ${sex}/${kind}`);
 
-  // 2. Head (extracted, skinned to the same 65-bone rig).
-  const headUrl = `${CHARS}/heads/Head_${sex === 'male' ? 'Male' : 'Female'}.glb`;
-  for (const hm of await partMeshes(headUrl)) bindPart(hm, skeleton, char);
+  // 2. Head, hair, eyebrows, beard — bound to the character skeleton.
+  for (const hm of headMeshes) bindPart(hm, skeleton, char);
+  for (const hm of hairMeshes) bindPart(hm, skeleton, char);
+  for (const hm of browMeshes) bindPart(hm, skeleton, char);
+  for (const hm of beardMeshes) bindPart(hm, skeleton, char);
 
-  // 3. Hair — never under the ranger hood (clipping), as the spec requires.
-  let style = hair;
-  if (style === undefined) {
-    style = kind === 'ranger' ? null : HAIR_STYLES[Math.floor(Math.random() * HAIR_STYLES.length)];
-  }
-  if (style) {
-    for (const hm of await partMeshes(`${CHARS}/hair/${style}.gltf`)) {
-      bindPart(hm, skeleton, char);
-    }
-  }
-  // Eyebrows: matching set for the sex.
-  const brows = sex === 'male' ? 'Eyebrows_Regular' : 'Eyebrows_Female';
-  for (const hm of await partMeshes(`${CHARS}/hair/${brows}.gltf`)) {
-    bindPart(hm, skeleton, char);
-  }
-  // Beard (male only).
-  if (beard && sex === 'male') {
-    for (const hm of await partMeshes(`${CHARS}/hair/Hair_Beard.gltf`)) {
-      bindPart(hm, skeleton, char);
-    }
-  }
-
-  // 4. Outfit palette variant.
+  // 3. Outfit palette variant.
   await applyPalette(char, kind, palette);
 
-  // 5. Shadows on everything the character brings in.
+  // 4. Shadows on everything the character brings in.
   char.traverse((o) => {
     if (o.isSkinnedMesh || o.isMesh) {
       o.castShadow = true;

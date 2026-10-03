@@ -1,9 +1,11 @@
-// Feature 3: the city. Ground/streets/houses/canal/harbour built from the
-// seeded layout; orbit camera + stats overlay kept from feature 1.
+// Feature 5: the city plus a playable third-person ranger.
+// WASD/arrows move, Shift runs, Space jumps; click the canvas for mouse look,
+// scroll to zoom. The orbit camera from feature 1 is retired.
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createStats } from './stats.js';
 import { buildCity } from './city/build.js';
+import { createPlayer, updatePlayer } from './player/player.js';
+import { updateCharacters } from './npc/npc.js';
 
 const canvas = document.getElementById('scene');
 
@@ -26,26 +28,9 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   2000,
 );
-camera.position.set(150, 110, 215);
+camera.position.set(30, 6, 52);
 
-// ?pos=x,y,z&target=x,y,z overrides for close-up inspection screenshots.
-const qp = new URLSearchParams(location.search);
-if (qp.has('pos')) {
-  const [px, py, pz] = qp.get('pos').split(',').map(Number);
-  camera.position.set(px, py, pz);
-}
-
-const controls = new OrbitControls(camera, renderer.domElement);
-if (qp.has('target')) {
-  const [tx, ty, tz] = qp.get('target').split(',').map(Number);
-  controls.target.set(tx, ty, tz);
-} else {
-  controls.target.set(0, 0, 10);
-}
-controls.maxPolarAngle = Math.PI * 0.495;
-controls.update();
-
-// Sun: shadow camera covers the whole 300 m town (follows the player in feature 5).
+// Sun: shadow camera covers the whole 300 m town (follows the player later).
 const sun = new THREE.DirectionalLight(0xfff1d6, 2.6);
 sun.position.set(140, 190, 70);
 sun.castShadow = true;
@@ -60,11 +45,20 @@ sun.shadow.bias = -0.0004;
 scene.add(sun);
 scene.add(new THREE.HemisphereLight(0xbdd7f2, 0x6f7f5a, 0.85));
 
-buildCity(scene).catch((err) => {
-  // eslint-disable-next-line no-console
-  console.error('city build failed:', err);
-  document.getElementById('stats').textContent = `CITY BUILD FAILED\n${err.message}`;
-});
+let player = null;
+buildCity(scene)
+  .then(async ({ colliders }) => {
+    player = await createPlayer(scene, camera, canvas);
+    // Test hooks: lets verification drive input and read state.
+    window.__player = player;
+    window.__colliders = colliders;
+    document.getElementById('stats').textContent = 'ready';
+  })
+  .catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error('startup failed:', err);
+    document.getElementById('stats').textContent = `STARTUP FAILED\n${err.message}`;
+  });
 
 // Stats overlay: FPS (EMA), frame ms, draw calls, triangles — see src/stats.js.
 const stats = createStats();
@@ -80,7 +74,11 @@ renderer.setAnimationLoop(() => {
   const now = performance.now();
   const dt = Math.min((now - lastT) / 1000, 0.1);
   lastT = now;
-  controls.update();
+  window.__simT = (window.__simT || 0) + dt; // test hook: sim seconds elapsed
+  if (player) {
+    updatePlayer(player, dt);
+    updateCharacters([player.group], dt);
+  }
   renderer.render(scene, camera);
   stats.update(dt, renderer);
 });
