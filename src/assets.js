@@ -2,17 +2,26 @@
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const loader = new GLTFLoader();
-const cache = new Map();
+const gltfCache = new Map();
+const sceneCache = new Map();
+
+/** Load a .glb/.gltf, cached by URL. Returns the full THREE.GLTF (scene + animations). */
+export function loadGltf(url) {
+  if (!gltfCache.has(url)) {
+    gltfCache.set(url, loader.loadAsync(url));
+  }
+  return gltfCache.get(url);
+}
 
 /** Load a .glb/.gltf, cached by URL. Returns the THREE.Group (scene root). */
 export function loadModel(url) {
-  if (!cache.has(url)) {
-    cache.set(
+  if (!sceneCache.has(url)) {
+    sceneCache.set(
       url,
-      loader.loadAsync(url).then((gltf) => gltf.scene),
+      loadGltf(url).then((gltf) => gltf.scene),
     );
   }
-  return cache.get(url);
+  return sceneCache.get(url);
 }
 
 /** Preload a list of model URLs in parallel. */
