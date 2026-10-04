@@ -91,9 +91,35 @@ still need a source, fish/dolphins jumping in the harbour.
 | `Quaternius_Ships` | Boat, BoatWSail, Lifeboat, Sail ship, Viking boat, CruiseShip | Boat ≈ 0.7 m → **×6**; Sail ship ≈ 6.4 m → ×3 |
 | `Quaternius_Cars` | Cop, NormalCar1/2, SUV, SportsCar/2, Taxi (wheels are separate meshes → can spin) | Taxi ≈ 4.2 m → **×1** (real scale) |
 
+## Unity-only packs → `asset_packs_unity/` (local only, git-ignored)
+
+Unpacked without Unity (`tools/unpack_unitypackage.py`), converted (`tools/fbx_to_glb.py`, NPC pack
+with `APPLY=1`), fixed (`tools/fix_converted_glb.py`) and atlas-linked (`tools/link_atlas_textures.py`).
+**1,322 models, all load in Three.js, all textured** (except 2 water planes + 1 pose file).
+Source: opengameasset.net "VIP" re-uploads of paid Unity Asset Store packs → kept **out of the public
+repo** on purpose. To rebuild on another machine, put the zips in `_archives/unity_only/` and rerun the
+four tools in that order.
+
+| Pack | Models | What it is | Status |
+|---|---|---|---|
+| `POLY_MegapolisCityPack` | 809 | Modern city: houses, cottages, apartment blocks, roads, airport, seaport, railway, farm, racing track, vehicles (ambulance, cars…), city props | ✅ real-world scale, one atlas `Polygon_Texture.png` |
+| `ToonyTinyCityExtended` | 432 | **Modular** cartoon city kit: wall/window/door/balcony/rooftop pieces, burger shop, hospital, police, factory, park, parking, streets, cars, tram, lamps | ✅ real scale; must be assembled into buildings |
+| `LowPolyVegetationKit` | 44 | Trees (pine etc.), plants, rocks, grass, water planes | ✅ ×0.6; leaves use alpha cut-out |
+| `LowPolyMedievalFantasy_NPCPack` | 37 | 16 medieval NPCs (M/F: King, Queen, Noble, Merchant, Cook, Blacksmith, Healer, Priest, Nun, Commoner) + base bodies + pre-posed static versions | ⚠️ see below |
+
+**Medieval NPCs — how to use:**
+- Each file contains **every** variant part at once (8 beards, 5 eyebrows/eyes/mouths, ~38 hair meshes).
+  Show one per group: hide meshes matching `/^(facialHair_|[MF]_eyebrows|[MF]_eyes|[MF]_mouth|[MF]_hair_)/`
+  except the chosen ones.
+- Materials `genericRGBMat_Body` / `genericRGBMat_Objects` need a colour texture: set `map` to
+  `Materials_Shaders_Textures/BodyPreColors/medievalTexture_bodyColor1..8.png` (body) and
+  `ObjectPreColors/medievalTexture_objectColor1..16.png` (clothes/objects), `flipY = false`, sRGB.
+  8 × 16 colour combos × parts = huge variety.
+- Height ≈ 2.07 m incl. hair → **×0.87** to match 1.8 m characters.
+- Own 99-bone rig (coat tails, cape, hair bones, `R_equip_joint`/`L_equip_joint` for props).
+  **No walk/idle clips ship with the pack** → use as static/posed NPCs (`NPC_PrePosed/` = vendors,
+  bystanders) until clips are retargeted in Blender.
+
 ## Not here
 
-- `_archives/unity_only/` — 4 Unity `.unitypackage` files from opengameasset.net ("VIP" re-uploads of
-  paid Asset Store packs: Megapolis City, Toony Tiny City, Medieval NPC Pack, Vegetation Kit).
-  Unclear license, Unity-only → **not used, not committed.**
-- `assets_free/` — Kenney CC0 packs (boats, docks, food, nature, particles, audio); see its `CREDITS.md`.
+- `_archives/` — all original zips (git-ignored, local only).
