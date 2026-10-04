@@ -4,8 +4,29 @@ Web-ready copies of every asset pack. Everything here is **glTF / GLB** (FBX-onl
 with `tools/fbx_to_glb.py` via headless Blender). Blender/OBJ/duplicate-FBX files were left out; the
 original zips are in `_archives/` (git-ignored, local only).
 
-All packs are by **Quaternius, CC0** unless noted. Checked 2026-10-04: **833 models, 0 broken files,
-0 missing textures/buffers.**
+All packs are by **Quaternius, CC0** unless noted. Checked 2026-10-04 by loading every file in
+Three.js `GLTFLoader`: **1,495 models (this folder + `assets_free/`) load with 0 errors.**
+
+FBX conversions were post-fixed with `tools/fix_converted_glb.py` (Blender exported 395 models with
+alpha 0 → invisible; and clip names like `Armature|Armature|Walk` → `Walk`). Re-run both tools in
+order if you convert more FBX.
+
+## Compatibility test results (rendered in Three.js)
+
+| Test | Result |
+|---|---|
+| Game outfits + **UAL2** clips (e.g. `Idle_Lantern_Loop`, `Idle_Torch_Loop`) | ✅ same rig, plays directly |
+| **Bestiary Imp/Puglin** + UAL1/UAL2 clips | ✅ their 55 bones are a subset of the UAL rig → all 86 UAL clips work (no fingers/pinky) |
+| Ultimate Modular Men/Women + own 24 clips (Walk, Wave, Idle_Gun_Pointing…) | ✅ |
+| Ultimate Modular + UAL clips via `SkeletonUtils.retargetClip` | ❌ legs stretch/twist — not plug-and-play. Use their own clips, or retarget offline in Blender |
+| Low Poly Men/Women + own clips (`Man_Walk`, `Female_Idle`, `Man_Sitting`…) | ✅ (scale ×0.37) |
+| Animals (Animated + Farm) own clips (Idle, Eating, Walk, Gallop…) | ✅ |
+| Prop in hand: torch → `hand_r` (game rig); pistol → `WristR` (Ultimate Modular rig) | ✅ attach as child of the bone; divide scale by the bone's world scale |
+| Converted static models (buildings, furniture, survival, cars, ships, trees) | ✅ correct colours after the alpha fix |
+
+**Bone-name gotcha:** Three.js strips dots from node names → `Wrist.R` is `WristR`, `UpperArm.L` is
+`UpperArmL`. Hand bones: game rig `hand_r`/`hand_l`; Ultimate Modular `WristR`/`WristL`; Low Poly
+`PalmR`/`PalmL`.
 
 > **Scale differs per pack.** Always compare against a 1.8 m character with a screenshot. Measured
 > sizes below; "×" is a suggested starting scale.
@@ -16,8 +37,8 @@ All packs are by **Quaternius, CC0** unless noted. Checked 2026-10-04: **833 mod
 |---|---|---|---|
 | `Quaternius_UltimateModularMen` | Adventurer, Beach, Casual_2, Casual_Hoodie, Farmer, King, Punk, Spacesuit, Suit, Swat, Worker (`Individual Characters/glTF/`) | own 62-bone rig, **24 clips each**: Idle, Idle_Neutral, Walk, Run, Run_Back/Left/Right, Wave, Interact, Roll, Punch/Kick, Sword/Gun, HitRecieve, Death | Modern townsfolk — fastest way to more NPC variety |
 | `Quaternius_UltimateModularWomen` | Adventurer, Casual, Formal, Medieval, Punk, SciFi, Soldier, Suit, Witch, Worker | same 62-bone rig, 24 clips each | Pairs with the men pack |
-| `Quaternius_LowPolyMen` / `LowPolyWomen` | Male_Casual/LongSleeve/Shirt/Suit, Female_Alternative/Casual/Dress/TankTop (+ `Smooth_` variants) | own rig, 11 clips each | Simpler/older style |
-| `Quaternius_Bestiary_DungeonMonsters` | Imp, Puglin (+ 3 colour textures each) | 55-bone rig, no clips | Not for a city — keep for later |
+| `Quaternius_LowPolyMen` / `LowPolyWomen` | Male_Casual/LongSleeve/Shirt/Suit, Female_Alternative/Casual/Dress/TankTop (+ `Smooth_` variants) | own 42-bone rig, 11 clips each: Idle, Walk, Run, Jump, Sitting, Standing, Clapping, Punch, SwordSlash, Death (prefixed `Man_`/`Female_`) | ~4.8 m tall → **×0.37** |
+| `Quaternius_Bestiary_DungeonMonsters` | Imp, Puglin (+ 3 colour textures each) | 55-bone **subset of the UAL rig** → all UAL1/UAL2 clips work | Enemies, night creatures, dungeon |
 
 **Rigs:** current game characters use the 65-bone Universal rig. The Ultimate Modular packs use a
 **different 62-bone rig** → use their own built-in clips (don't mix with UAL clips without retargeting).
@@ -50,15 +71,15 @@ All packs are by **Quaternius, CC0** unless noted. Checked 2026-10-04: **833 mod
 | `Quaternius_FantasyPropsMegaKit` | 94 models: market & tavern props — barrels (apples), crates, sacks, banners (+ cloth anim), anvil, benches, tables, chairs, beds, shelves, lanterns, candles, bottles, food, carts, signs |
 | `Quaternius_Furniture` | 123 interior models: beds, couches, chairs, tables, kitchen, bathroom, doors, lamps, plants, rugs |
 | `Quaternius_Survival` | 53 models: bonfire (+ fire), tent, torch, backpack, tools, cans, radio, traps |
-| `Quaternius_Guns` | 6 guns (16 clips) — not needed for a peaceful city |
+| `Quaternius_Guns` | 6 guns with Fire/Reload/Slide clips; ~10 units long → **×0.03–0.05** to fit a hand |
 
 ## animals/
 
 | Pack | Contents | Animations |
 |---|---|---|
 | `Quaternius_AnimatedAnimals` | Alpaca, Bull, Cow, Deer, Donkey, Fox, Horse, Horse_White, Husky, ShibaInu, Stag, Wolf | 13 each: Idle, Idle_2, Idle_Headlow, Eating, Walk, Gallop, Jump, Attack, HitReact, Death |
-| `Quaternius_FarmAnimals` | Cow, Horse, Llama, Pig, Pug, Sheep, Zebra | 26 clips total — Cow ≈ 9 m → **×0.25** |
-| `Quaternius_AnimatedFish` | Dolphin, Fish1–3, Manta ray, Shark, Whale | 1 swim clip each — for the harbour/sea |
+| `Quaternius_FarmAnimals` | Cow, Horse, Llama, Pig, Pug, Sheep, Zebra | Idle, Walk, WalkSlow, Run, Jump, Death — Cow ≈ 9 m → **×0.25** |
+| `Quaternius_AnimatedFish` | Dolphin, Fish1–3, Manta ray, Shark, Whale | `Swim` clip each; ~8–16 m → **×0.1–0.3** |
 
 City ideas: dogs (Husky, ShibaInu, Pug) walking with NPCs, horses + donkey at the market, pigeons
 still need a source, fish/dolphins jumping in the harbour.
