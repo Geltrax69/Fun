@@ -6,6 +6,8 @@ import { createStats } from './stats.js';
 import { buildCity } from './city/build.js';
 import { createPlayer, updatePlayer } from './player/player.js';
 import { updateCharacters } from './npc/npc.js';
+import { buildWaypointGraph } from './npc/graph.js';
+import { createCrowd } from './npc/crowd.js';
 
 const canvas = document.getElementById('scene');
 
@@ -46,11 +48,18 @@ scene.add(sun);
 scene.add(new THREE.HemisphereLight(0xbdd7f2, 0x6f7f5a, 0.85));
 
 let player = null;
+let crowd = null;
 buildCity(scene)
   .then(async ({ colliders }) => {
-    player = await createPlayer(scene, camera, canvas);
+    const graph = buildWaypointGraph();
+    [player, crowd] = await Promise.all([
+      createPlayer(scene, camera, canvas),
+      createCrowd(scene, graph, 36),
+    ]);
     // Test hooks: lets verification drive input and read state.
     window.__player = player;
+    window.__crowd = crowd;
+    window.__graph = graph;
     window.__colliders = colliders;
     window.__scene = scene;
     document.getElementById('stats').textContent = 'ready';
@@ -80,6 +89,7 @@ renderer.setAnimationLoop(() => {
     updatePlayer(player, dt);
     updateCharacters([player.group], dt);
   }
+  if (crowd) crowd.update(dt, camera);
   renderer.render(scene, camera);
   stats.update(dt, renderer);
 });

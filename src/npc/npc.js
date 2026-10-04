@@ -156,6 +156,18 @@ const HAIR_STYLES = [
   'Hair_Buns', 'Hair_Buzzed', 'Hair_BuzzedFemale', 'Hair_Long', 'Hair_SimpleParted',
 ];
 
+/** A random varied NPC configuration (sex/outfit/palette/hair/beard). */
+export function randomNpcConfig() {
+  const sex = Math.random() < 0.5 ? 'male' : 'female';
+  return {
+    sex,
+    outfit: Math.random() < 0.5 ? 'peasant' : 'ranger',
+    palette: Math.random() < 0.3 ? 1 : 0,
+    hair: undefined, // auto: none for rangers (hood), random for peasants
+    beard: sex === 'male' && Math.random() < 0.25,
+  };
+}
+
 /**
  * Bind a template part mesh onto the character's skeleton. Bone order is
  * identical across the outfit/head/hair skeletons (verified at staging), so
