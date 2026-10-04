@@ -50,11 +50,14 @@ scene.add(new THREE.HemisphereLight(0xbdd7f2, 0x6f7f5a, 0.85));
 let player = null;
 let crowd = null;
 buildCity(scene)
-  .then(async ({ colliders }) => {
+  .then(async ({ layout, colliders }) => {
     const graph = buildWaypointGraph();
+    const benches = layout.props
+      .filter((p) => p.type === 'Bench')
+      .map((p) => ({ x: p.x, z: p.z, rotY: p.rotY, taken: null }));
     [player, crowd] = await Promise.all([
       createPlayer(scene, camera, canvas),
-      createCrowd(scene, graph, 36),
+      createCrowd(scene, graph, benches, 36),
     ]);
     // Test hooks: lets verification drive input and read state.
     window.__player = player;
@@ -89,7 +92,7 @@ renderer.setAnimationLoop(() => {
     updatePlayer(player, dt);
     updateCharacters([player.group], dt);
   }
-  if (crowd) crowd.update(dt, camera);
+  if (crowd) crowd.update(dt, camera, player);
   renderer.render(scene, camera);
   stats.update(dt, renderer);
 });

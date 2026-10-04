@@ -48,19 +48,43 @@ const results = await page.evaluate(() => {
   out.sexCount = new Set(cfgs.map((c) => c.sex)).size;
   out.outfitCount = new Set(cfgs.map((c) => c.outfit)).size;
 
-  // movement: step npc 0 for 2 sim-seconds
-  const npc0 = crowd.npcs[0];
-  const x0 = npc0.pos.x, z0 = npc0.pos.z;
-  const fakeCam = { position: npc0.pos.clone() }; // keep LOD near
-  for (let i = 0; i < 120; i++) crowd.update(1 / 60, fakeCam);
-  out.moved = Math.hypot(npc0.pos.x - x0, npc0.pos.z - z0);
+  // movement: step a wandering NPC for 2 sim-seconds
+  const wanderer = crowd.npcs.find((n) => n.behavior === 'wander');
+  const x0 = wanderer.pos.x, z0 = wanderer.pos.z;
+  const fakeCam = { position: wanderer.pos.clone() }; // keep LOD near
+  const player = window.__player;
+  const V3 = Object.getPrototypeOf(wanderer.pos).constructor;
+  for (let i = 0; i < 120; i++) crowd.update(1 / 60, fakeCam, player);
+  out.moved = Math.hypot(wanderer.pos.x - x0, wanderer.pos.z - z0);
 
-  // LOD: camera far away -> all hidden; camera on npc0 -> npc0 visible
-  const farCam = { position: new (Object.getPrototypeOf(npc0.pos).constructor)(0, 60, 400) };
-  crowd.update(1 / 60, farCam);
+  // LOD: camera far away -> all hidden; camera on npc -> npc visible
+  const npc0 = crowd.npcs[0];
+  const farCam = { position: new V3(0, 60, 400) };
+  crowd.update(1 / 60, farCam, player);
   out.hiddenFar = crowd.npcs.filter((n) => !n.group.visible).length;
-  crowd.update(1 / 60, fakeCam);
-  out.nearVisible = npc0.group.visible;
+  crowd.update(1 / 60, fakeCam, player);
+  out.nearVisible = wanderer.group.visible;
+
+  // behaviors
+  out.sitters = crowd.npcs.filter((n) => n.behavior === 'sit').length;
+
+  // chat: put two wanderers 2 m apart, run the chat tick
+  const wa = crowd.npcs.filter((n) => n.behavior === 'wander');
+  const a = wa[0], b = wa[1];
+  a.pos.set(0, 0, 40); b.pos.set(1.5, 0, 40);
+  for (let i = 0; i < 60; i++) crowd.update(1 / 60, { position: new V3(0, 5, 40) }, player);
+  out.chatStarted = crowd.npcs.filter((n) => n.behavior === 'chat').length >= 2;
+
+  // look-at-player: NPC within 4 m turns its head bone toward the player
+  const looker = crowd.npcs.find((n) => n.behavior === 'wander' && n !== a && n !== b);
+  looker.pos.set(20, 0, 44);
+  looker.group.rotation.y = Math.PI; // facing away from the player
+  player.pos.set(20, 0, 41); // 3 m away
+  let head = null;
+  looker.group.traverse((o) => { if (o.isBone && o.name === 'Head') head = o; });
+  const hy0 = head.rotation.y;
+  for (let i = 0; i < 10; i++) crowd.update(1 / 60, { position: new V3(20, 5, 44) }, player);
+  out.headTurned = Math.abs(head.rotation.y - hy0) > 0.05;
   return out;
 });
 
@@ -73,6 +97,9 @@ check('NPC variety', results.sexCount === 2 && results.outfitCount === 2);
 check('NPCs walk the graph', results.moved > 3.0, `${results.moved.toFixed(1)} m in 2 s`);
 check('LOD hides far NPCs', results.hiddenFar === 36, `${results.hiddenFar}/36 hidden`);
 check('LOD shows near NPC', results.nearVisible === true);
+check('NPCs sit on benches', results.sitters >= 3, `${results.sitters} seated`);
+check('NPCs chat in pairs', results.chatStarted);
+check('NPCs look at the player', results.headTurned);
 
 // Street-level screenshot + draw calls with the crowd active.
 await page.evaluate(() => {
