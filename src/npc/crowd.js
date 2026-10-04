@@ -122,6 +122,7 @@ export async function createCrowd(scene, graph, benches, count = 36) {
   function update(dt, camera, player) {
     frame++;
     ctx.player = player;
+    Object.assign(ctx, crowdHooks);
     const slowFrame = frame % 3 === 0;
     chatTick -= dt;
     if (chatTick <= 0) {
@@ -144,5 +145,11 @@ export async function createCrowd(scene, graph, benches, count = 36) {
     }
   }
 
-  return { npcs, update };
+  // Interaction hooks (feature 10), assigned by main.js via setHooks.
+  let crowdHooks = {};
+  function setHooks(hooks) {
+    crowdHooks = hooks || {};
+  }
+
+  return { npcs, update, setHooks };
 }

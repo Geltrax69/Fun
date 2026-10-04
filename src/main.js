@@ -2,12 +2,14 @@
 // WASD/arrows move, Shift runs, Space jumps; click the canvas for mouse look,
 // scroll to zoom. The orbit camera from feature 1 is retired.
 import * as THREE from 'three';
+import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { createStats } from './stats.js';
 import { buildCity } from './city/build.js';
 import { createPlayer, updatePlayer } from './player/player.js';
 import { updateCharacters } from './npc/npc.js';
 import { buildWaypointGraph } from './npc/graph.js';
 import { createCrowd } from './npc/crowd.js';
+import { createInteraction } from './npc/interact.js';
 
 const canvas = document.getElementById('scene');
 
@@ -31,6 +33,14 @@ const camera = new THREE.PerspectiveCamera(
   2000,
 );
 camera.position.set(30, 6, 52);
+
+// Speech bubbles (feature 10) render through a CSS2D overlay.
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(window.innerWidth, window.innerHeight);
+Object.assign(labelRenderer.domElement.style, {
+  position: 'fixed', top: '0', left: '0', pointerEvents: 'none', zIndex: 5,
+});
+document.body.appendChild(labelRenderer.domElement);
 
 // Sun: shadow camera covers the whole 300 m town (follows the player later).
 const sun = new THREE.DirectionalLight(0xfff1d6, 2.6);
@@ -65,6 +75,14 @@ buildCity(scene)
     window.__graph = graph;
     window.__colliders = colliders;
     window.__scene = scene;
+    // Feature 10: E interacts with the nearest NPC.
+    const interaction = createInteraction();
+    interaction.hooks.graph = graph;
+    crowd.setHooks(interaction.hooks);
+    window.__interaction = interaction;
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'KeyE' && !e.repeat) interaction.tryInteract(player, crowd);
+    });
     document.getElementById('stats').textContent = 'ready';
   })
   .catch((err) => {
@@ -81,6 +99,7 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  labelRenderer.setSize(window.innerWidth, window.innerHeight);
 });
 
 renderer.setAnimationLoop(() => {
@@ -94,5 +113,6 @@ renderer.setAnimationLoop(() => {
   }
   if (crowd) crowd.update(dt, camera, player);
   renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
   stats.update(dt, renderer);
 });

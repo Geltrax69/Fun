@@ -15,6 +15,7 @@ function setAnim(npc, name, loop = true) {
   npc.anim = name;
   playAnim(npc.group, name, { loop }).catch(() => {});
 }
+export { setAnim };
 
 export function initBehavior(npc) {
   npc.behavior = 'wander';
@@ -52,7 +53,7 @@ function nearestNode(graph, x, z) {
 }
 
 /** Return a wandering NPC to the graph after an off-graph behavior. */
-function rejoinGraph(npc, graph) {
+export function rejoinGraph(npc, graph) {
   npc.node = nearestNode(graph, npc.pos.x, npc.pos.z);
   const links = graph.nodes[npc.node].links;
   npc.next = links[(Math.random() * links.length) | 0];
@@ -89,6 +90,7 @@ function stopSitting(npc, graph) {
 export function updateBehavior(npc, dt, ctx) {
   const { graph, benches, player, npcs } = ctx;
   npc.greetCooldown = Math.max(0, npc.greetCooldown - dt);
+  npc.interactCooldown = Math.max(0, (npc.interactCooldown || 0) - dt);
 
   switch (npc.behavior) {
     case 'wander': {
@@ -200,6 +202,25 @@ export function updateBehavior(npc, dt, ctx) {
       npc.faceYaw = Math.atan2(player.pos.x - npc.pos.x, player.pos.z - npc.pos.z);
       npc.behaviorT -= dt;
       if (npc.behaviorT <= 0) rejoinGraph(npc, graph);
+      break;
+    }
+
+    case 'interactStand': {
+      // Stood up from a bench to talk — then the interaction begins.
+      npc.faceYaw = Math.atan2(player.pos.x - npc.pos.x, player.pos.z - npc.pos.z);
+      npc.behaviorT -= dt;
+      if (npc.behaviorT <= 0 && ctx.beginTalk) ctx.beginTalk(npc);
+      break;
+    }
+
+    case 'interact': {
+      npc.faceYaw = Math.atan2(player.pos.x - npc.pos.x, player.pos.z - npc.pos.z);
+      if (npc.interactT > 0) {
+        npc.interactT -= dt;
+        if (npc.interactT <= 0) setAnim(npc, 'Idle_Talking_Loop');
+      }
+      npc.behaviorT -= dt;
+      if (npc.behaviorT <= 0 && ctx.endInteract) ctx.endInteract(npc);
       break;
     }
 
