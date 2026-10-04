@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadModel } from '../assets.js';
 import { generateLayout, SCHEME_COUNT } from './layout.js';
-import { addBuildingBox, colliders, addCanalWallBoxes, addQuayWallBoxes, addPropCollider, addWaterGuards } from './colliders.js';
+import { WALL_Y, BRIDGE_Y, addBuildingBox, colliders, addCanalWallBoxes, addQuayWallBoxes, addPropCollider, addWaterGuards } from './colliders.js';
 
 const CITY_URL = '/assets/city';
 const TEX_URL = '/assets/city/textures';
@@ -49,6 +49,24 @@ function flatPlane(w, d, x, y, z, material) {
  * attribute except position/normal/uv, and make index-ness uniform
  * (the converted .glb files mix indexed and non-indexed meshes).
  */
+// RiverWall's railing is everything above the wall top (8.62 m in model
+// space). Drop triangles lying wholly above it — non-indexed geometry only.
+function withoutRailing(geo) {
+  const pos = geo.attributes.position;
+  const keep = [];
+  for (let t = 0; t < pos.count; t += 3) {
+    if (Math.min(pos.getY(t), pos.getY(t + 1), pos.getY(t + 2)) < 8.6) keep.push(t);
+  }
+  const out = new THREE.BufferGeometry();
+  for (const [name, attr] of Object.entries(geo.attributes)) {
+    const n = attr.itemSize;
+    const arr = new attr.array.constructor(keep.length * 3 * n);
+    keep.forEach((t, k) => arr.set(attr.array.subarray(t * n, (t + 3) * n), k * 3 * n));
+    out.setAttribute(name, new THREE.BufferAttribute(arr, n));
+  }
+  return out;
+}
+
 function mergeable(geos) {
   const norm = [];
   for (const g of geos) {
@@ -270,24 +288,29 @@ async function buildCanal(scene, layout) {
   const wallGeo = mergeable(wallGeos);
   if (!wallGeo) throw new Error('canal wall merge failed');
   const wallMat = new THREE.MeshStandardMaterial({ color: 0x8d8578, roughness: 1 });
-  const segs = [];
+  // Segments touching a bridge drop their railing so the bridge is reachable.
+  const atBridge = (z) => bridges.some((bz) => Math.abs(z - bz) < 8.3);
+  const railed = [];
+  const open = [];
   for (let z = -150 + 5.46; z < 150; z += 10.92) {
-    segs.push([-7.15, z, 0]);
-    segs.push([7.15, z, 0]);
+    for (const x of [-7.15, 7.15]) (atBridge(z) ? open : railed).push([x, z]);
   }
-  const im = new THREE.InstancedMesh(wallGeo, wallMat, segs.length);
   const M = new THREE.Matrix4();
-  segs.forEach(([x, z], i) => {
-    M.makeTranslation(x, -4.4, z);
-    im.setMatrixAt(i, M);
-  });
-  im.instanceMatrix.needsUpdate = true;
-  im.castShadow = im.receiveShadow = true;
-  scene.add(im);
-  addCanalWallBoxes(segs);
+  for (const [geo, segs] of [[wallGeo, railed], [withoutRailing(wallGeo), open]]) {
+    const im = new THREE.InstancedMesh(geo, wallMat, segs.length);
+    segs.forEach(([x, z], i) => {
+      M.makeTranslation(x, WALL_Y, z);
+      im.setMatrixAt(i, M);
+    });
+    im.instanceMatrix.needsUpdate = true;
+    im.castShadow = im.receiveShadow = true;
+    scene.add(im);
+  }
+  addCanalWallBoxes(railed, true);
+  addCanalWallBoxes(open, false);
 
   for (const bz of bridges)
-    await placeModel(scene, 'RiverBridge', 0, -1.2, bz, 0);
+    await placeModel(scene, 'RiverBridge', 0, BRIDGE_Y, bz, 0);
 }
 
 // ---- harbour: quay, sea, lighthouse, ship ----
@@ -319,13 +342,13 @@ async function buildHarbour(scene, layout) {
   const im = new THREE.InstancedMesh(wallGeo, wallMat, segs.length);
   const M = new THREE.Matrix4();
   segs.forEach((x, i) => {
-    M.makeTranslation(x, -4.4, 152.15);
+    M.makeTranslation(x, WALL_Y, 152.15);
     im.setMatrixAt(i, M);
   });
   im.instanceMatrix.needsUpdate = true;
   im.castShadow = im.receiveShadow = true;
   scene.add(im);
-  addQuayWallBoxes(segs, 152.15);
+  addQuayWallBoxes(segs, 152.15, true);
 
   const L = layout.lighthouse;
   const lh = await placeModel(scene, 'Lighthouse', L.x, 0.3, L.z, L.rotY);

@@ -1,7 +1,6 @@
 // Feature 8: sidewalk waypoint graph — nodes along both sidewalks of every
 // street (linked consecutively), plus proximity links at intersections so NPCs
-// can turn corners. Horizontal streets don't cross the canal (no walkable
-// bridge), so the graph splits into west/east components there.
+// can turn corners. Horizontal streets cross the canal only on bridges.
 import { TOWN } from '../city/layout.js';
 
 const STEP = 20; // node spacing along a sidewalk (m)
@@ -54,6 +53,13 @@ export function buildWaypointGraph() {
         prev = i;
       }
     }
+  }
+
+  // Bridge crossings: (-12,bz)-(0,bz)-(12,bz); the ends sit within LINK_DIST
+  // of the sidewalk nodes at (±20, bz±7), so proximity links join them.
+  for (const bz of TOWN.bridges) {
+    const w = addNode(-12, bz), m = addNode(0, bz), e = addNode(12, bz);
+    link(w, m); link(m, e);
   }
 
   // Proximity links at intersections (nodes from crossing sidewalks come

@@ -2,6 +2,7 @@
 // street-prop circle colliders, capsule-vs-AABB / circle-vs-circle resolution,
 // and analytic ground height (canal bed, sea bed, streets).
 import * as THREE from 'three';
+import { TOWN } from './layout.js';
 
 export const PLAYER_RADIUS = 0.35;
 export const PLAYER_HEIGHT = 1.7;
@@ -28,7 +29,19 @@ export function addPropCollider(x, z, r) {
  * (bed at -1.6, flanked by tall walls) which meets the sea at the south.
  * (Swimming arrives in feature 11; for now the player wades on the bed.)
  */
+// Bridge deck: RiverBridge sunk so its deck ends meet the street (y≈0) and
+// the arch crown is 0.3 m higher (raycast-measured). Walkable |z-bz| < 2.2.
+export const BRIDGE_Y = -3.61;
+export function bridgeDeckAt(x, z) {
+  if (Math.abs(x) > 6.5) return null;
+  for (const bz of TOWN.bridges)
+    if (Math.abs(z - bz) < 2.2) return 0.3 * Math.max(0, 1 - (x / 6.5) ** 2);
+  return null;
+}
+
 export function groundHeightAt(x, z) {
+  const deck = bridgeDeckAt(x, z);
+  if (deck !== null) return deck;
   if (Math.abs(x) < 5 && z > -150 && z < 150) return -1.6; // canal bed (walled section)
   if (Math.abs(x) < 5 && z >= -350 && z <= -150) return -1.6; // north reach bed
   if (z > 150) return -1.6; // sea bed past the quay
@@ -39,23 +52,29 @@ export function groundHeightAt(x, z) {
  *  make every water region escapable, so the guards are no longer needed. */
 export function addWaterGuards() {}
 
+// RiverWall top sits 8.62 m above its origin. Walls used to stand 4.2 m
+// above the street, burying the bridges; now the top is flush with grade so
+// the canal and sea are open embankments you can walk to (and bridges cross).
+export const WALL_Y = -8.67;
+const WALL_TOP = WALL_Y + 8.62; // ≈ -0.05: below the player's feet on the street
+const RAIL_TOP = WALL_TOP + 1.0; // railed segments block like a fence
+
 /** Canal wall AABBs (called from buildCanal with the exact segment list). */
-export function addCanalWallBoxes(segments) {
-  // RiverWall model extents, placed at y=-4.4 (measured at staging).
+export function addCanalWallBoxes(segments, railed) {
   for (const [x, z] of segments) {
     addBuildingBox(new THREE.Box3(
-      new THREE.Vector3(x - 2.14, -4.4, z - 5.46),
-      new THREE.Vector3(x + 2.14, 5.21, z + 5.46),
+      new THREE.Vector3(x - 2.14, WALL_Y, z - 5.46),
+      new THREE.Vector3(x + 2.14, railed ? RAIL_TOP : WALL_TOP, z + 5.46),
     ));
   }
 }
 
 /** Quay wall AABBs (called from buildHarbour; wall rotated 90°). */
-export function addQuayWallBoxes(xs, z) {
+export function addQuayWallBoxes(xs, z, railed) {
   for (const x of xs) {
     addBuildingBox(new THREE.Box3(
-      new THREE.Vector3(x - 5.46, -4.4, z - 2.14),
-      new THREE.Vector3(x + 5.46, 5.21, z + 2.14),
+      new THREE.Vector3(x - 5.46, WALL_Y, z - 2.14),
+      new THREE.Vector3(x + 5.46, railed ? RAIL_TOP : WALL_TOP, z + 2.14),
     ));
   }
 }
