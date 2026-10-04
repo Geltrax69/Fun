@@ -95,7 +95,11 @@ still need a source, fish/dolphins jumping in the harbour.
 
 Unpacked without Unity (`tools/unpack_unitypackage.py`), converted (`tools/fbx_to_glb.py`, NPC pack
 with `APPLY=1`), fixed (`tools/fix_converted_glb.py`) and atlas-linked (`tools/link_atlas_textures.py`).
-**1,322 models, all load in Three.js, all textured** (except 2 water planes + 1 pose file).
+**1,679 models, all load in Three.js, all textured** (except 2 water planes, 1 pose file, and 18
+Anime Tokyo signs/props that are plain-colour by design).
+Anime Tokyo stores material links in prefabs, so it also needs `tools/link_unity_materials.py`
+(reads the `.mat` files: albedo, normal, emission, colour, transparency; mapping built from prefabs,
+saved as `_material_map.json`).
 Source: opengameasset.net "VIP" re-uploads of paid Unity Asset Store packs → kept **out of the public
 repo** on purpose. To rebuild on another machine, put the zips in `_archives/unity_only/` and rerun the
 four tools in that order.
@@ -105,6 +109,7 @@ four tools in that order.
 | `POLY_MegapolisCityPack` | 809 | Modern city: houses, cottages, apartment blocks, roads, airport, seaport, railway, farm, racing track, vehicles (ambulance, cars…), city props | ✅ real-world scale, one atlas `Polygon_Texture.png` |
 | `ToonyTinyCityExtended` | 432 | **Modular** cartoon city kit: wall/window/door/balcony/rooftop pieces, burger shop, hospital, police, factory, park, parking, streets, cars, tram, lamps | ✅ real scale; must be assembled into buildings |
 | `LowPolyVegetationKit` | 44 | Trees (pine etc.), plants, rocks, grass, water planes | ✅ ×0.6; leaves use alpha cut-out |
+| `AnimeTokyo` | 357 | Japanese city (realistic-stylised): 39 buildings (apartment blocks 22–28 m, corner buildings, cylindrical towers…), 86 shop signs & LED billboards, 142 modular props (doors, AC units, antennas, vending…), 68 traffic assets (roads, curbs, highway), 13 metro assets, 4 vehicles, 5 nature | ✅ real scale; full PBR — albedo + **normal maps** + **emissive** signs + transparent glass. Heavier: up to 53 k tris/building |
 | `LowPolyMedievalFantasy_NPCPack` | 37 | 16 medieval NPCs (M/F: King, Queen, Noble, Merchant, Cook, Blacksmith, Healer, Priest, Nun, Commoner) + base bodies + pre-posed static versions | ⚠️ see below |
 
 **Medieval NPCs — how to use:**
