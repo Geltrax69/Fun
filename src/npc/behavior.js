@@ -224,6 +224,12 @@ export function updateBehavior(npc, dt, ctx) {
       break;
     }
 
+    case 'torch': {
+      // Night watch: stand holding the torch. The torch manager owns
+      // assignment/release; nothing to do per-frame here.
+      break;
+    }
+
     default:
       break;
   }

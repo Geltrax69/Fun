@@ -30,27 +30,14 @@ export function addPropCollider(x, z, r) {
  */
 export function groundHeightAt(x, z) {
   if (Math.abs(x) < 5 && z > -150 && z < 150) return -1.6; // canal bed (walled section)
+  if (Math.abs(x) < 5 && z >= -350 && z <= -150) return -1.6; // north reach bed
   if (z > 150) return -1.6; // sea bed past the quay
   return 0;
 }
 
-/** Invisible guard boxes so the player can't get trapped in water. */
-export function addWaterGuards() {
-  // Plug the canal mouth (quay gap at |x|<9): the 1.6 m drop into the sea
-  // can't be climbed back out of until swimming (feature 11).
-  addBuildingBox(new THREE.Box3(
-    new THREE.Vector3(-9, -2, 149),
-    new THREE.Vector3(9, 1, 153),
-  ));
-  // Banks of the unwalled canal trench north of town (z in [-350,-150]):
-  // the 1.6 m banks can't be climbed, so keep the player out entirely.
-  for (const sx of [-5, 5]) {
-    addBuildingBox(new THREE.Box3(
-      new THREE.Vector3(sx - 0.25, -2, -350),
-      new THREE.Vector3(sx + 0.25, 1, -150),
-    ));
-  }
-}
+/** Invisible guard boxes — removed in feature 11: swimming + mantle (climb-out)
+ *  make every water region escapable, so the guards are no longer needed. */
+export function addWaterGuards() {}
 
 /** Canal wall AABBs (called from buildCanal with the exact segment list). */
 export function addCanalWallBoxes(segments) {

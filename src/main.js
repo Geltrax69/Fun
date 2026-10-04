@@ -10,6 +10,11 @@ import { updateCharacters } from './npc/npc.js';
 import { buildWaypointGraph } from './npc/graph.js';
 import { createCrowd } from './npc/crowd.js';
 import { createInteraction } from './npc/interact.js';
+import { createDayNight } from './fx/daynight.js';
+import { createLamps } from './fx/lamps.js';
+import { createTorchManager } from './npc/torch.js';
+import { createAudio } from './fx/audio.js';
+import { createMinimap } from './fx/minimap.js';
 
 const canvas = document.getElementById('scene');
 
@@ -55,21 +60,44 @@ sun.shadow.camera.top = 180;
 sun.shadow.camera.bottom = -180;
 sun.shadow.bias = -0.0004;
 scene.add(sun);
-scene.add(new THREE.HemisphereLight(0xbdd7f2, 0x6f7f5a, 0.85));
+const hemi = new THREE.HemisphereLight(0xbdd7f2, 0x6f7f5a, 0.85);
+scene.add(hemi);
+
+// Feature 11a: day/night cycle drives sun, sky, fog, hemisphere.
+const dayNight = createDayNight(scene, sun, hemi, SKY);
+window.__dayNight = dayNight;
 
 let player = null;
 let crowd = null;
+let lamps = null;
+let torches = null;
+let graphRef = null;
+let minimap = null;
+const audio = createAudio();
+window.__audio = audio;
 buildCity(scene)
   .then(async ({ layout, colliders }) => {
     const graph = buildWaypointGraph();
     const benches = layout.props
       .filter((p) => p.type === 'Bench')
       .map((p) => ({ x: p.x, z: p.z, rotY: p.rotY, taken: null }));
+    const lampPositions = layout.props
+      .filter((p) => p.type === 'Lamppost')
+      .map((p) => ({ x: p.x, z: p.z }));
+    lamps = createLamps(scene, lampPositions, dayNight);
+    window.__lamps = lamps;
+    // Feature 11c: torch bearers at night.
+    torches = createTorchManager(scene, dayNight);
+    graphRef = graph;
+    window.__torches = torches;
+    // Feature 11f: minimap.
+    minimap = createMinimap(layout);
     [player, crowd] = await Promise.all([
       createPlayer(scene, camera, canvas),
       createCrowd(scene, graph, benches, 36),
     ]);
     // Test hooks: lets verification drive input and read state.
+    window.__THREE = THREE;
     window.__player = player;
     window.__crowd = crowd;
     window.__graph = graph;
@@ -112,6 +140,11 @@ renderer.setAnimationLoop(() => {
     updateCharacters([player.group], dt);
   }
   if (crowd) crowd.update(dt, camera, player);
+  dayNight.update(dt);
+  if (lamps && player) lamps.update(dt, player.pos);
+  if (torches && crowd && player) torches.update(crowd.npcs, graphRef, player.pos, window.__simT || 0);
+  if (player) audio.update(dt, player);
+  if (minimap && player && crowd) minimap.update(player, crowd.npcs);
   renderer.render(scene, camera);
   labelRenderer.render(scene, camera);
   stats.update(dt, renderer);

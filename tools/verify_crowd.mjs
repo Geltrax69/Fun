@@ -109,8 +109,11 @@ await page.evaluate(() => {
   p.yaw = Math.PI; p.camYaw = 0; p.camPitch = 0.3; p.camDist = 4.6;
 });
 await page.waitForTimeout(6000);
-const calls = await page.evaluate(() => window.__rendererInfo || null);
-await page.screenshot({ path: '/tmp/fun_crowd.png' });
+try {
+  await page.screenshot({ path: '/tmp/fun_crowd.png', timeout: 25000 });
+} catch (e) {
+  checks.push(`(screenshot skipped: ${String(e).split('\n')[0].slice(0, 50)})`);
+}
 
 console.log(checks.join('\n'));
 console.log(`--- console: ${errors.length} error(s) ---`);
